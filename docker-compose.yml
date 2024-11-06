@@ -1,0 +1,27 @@
+services:
+  db:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: S3cur3P@ssw0rd!
+      MYSQL_DATABASE: mydatabase
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: S3cur3P@ssw0rd!
+      UPLOAD_LIMIT: 64M
+    ports:
+      - "80:80"
+
+volumes:
+  db_data:
+    driver: local
