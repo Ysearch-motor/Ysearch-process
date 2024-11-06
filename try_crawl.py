@@ -1,13 +1,16 @@
 import requests
+import mysql.connector
+from mysql.connector import errorcode
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-import pandas as pd
+from models.url import Session
 
-def crawl(url, max_pages=5):
+def crawl(url, max_pages=50):
     pages_to_visit = [url]
     visited_pages = set()
     data = []
 
+    session = Session()
     while pages_to_visit and len(visited_pages) < max_pages:
         current_url = pages_to_visit.pop(0)
         if current_url in visited_pages:
@@ -31,21 +34,15 @@ def crawl(url, max_pages=5):
             if full_url not in data:
                 if full_url.startswith('http'):
                     data.append(full_url)
+                    Session.add(full_url)
+                    Session.commit()
                 else:
                     continue
             else:
                 continue
 
         print(f"Visited {current_url}")
+    Session.close()
 
-    return data
-
-if __name__ == "__main__":
-    start_url = "https://www.lemonde.fr/"  # Replace with the target URL
-    crawled_data = crawl(start_url)
-    print("Crawled data:", crawled_data)
-    df = pd.DataFrame(crawled_data, columns=['URL'])
-    df.to_csv('crawled_data.csv', index=False)
-    for i in range(0,100,1):
-        df = pd.DataFrame(crawl(crawled_data[i]))
-        df.to_csv('crawled_data.csv',mode='a', index=False)
+if __name__ == '__main__':
+    crawl('https://www.lemonde.fr/',1000)

@@ -3,7 +3,7 @@ services:
     image: mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: S3cur3P@ssw0rd!
+      MYSQL_ROOT_PASSWORD: S3cur3Passw0rd!
       MYSQL_DATABASE: ysearch
       MYSQL_USER: user
       MYSQL_PASSWORD: userpassword
@@ -14,13 +14,16 @@ services:
 
   phpmyadmin:
     image: phpmyadmin
+    platform: linux/amd6
     restart: always
     environment:
       PMA_HOST: db
-      MYSQL_ROOT_PASSWORD: S3cur3P@ssw0rd!
+      MYSQL_ROOT_PASSWORD: S3cur3Passw0rd!
       UPLOAD_LIMIT: 64M
     ports:
       - "80:80"
+    depends_on:
+      - db
 
 volumes:
   db_data:
