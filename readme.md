@@ -80,5 +80,5 @@ Utilisez la librairie `django-environ` pour charger ces variables dans votre pro
 
 ## Support
 Pour toute question ou problème, veuillez contacter :
-- **Email** : support@votredomaine.com
+<!-- - **Email** :  -->
 - **Issues GitHub** : [https://github.com/votre-nom/votre-repo/issues](https://github.com/votre-nom/votre-repo/issues)
