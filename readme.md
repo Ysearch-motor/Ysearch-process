@@ -82,3 +82,4 @@ Utilisez la librairie `django-environ` pour charger ces variables dans votre pro
 Pour toute question ou problème, veuillez contacter :
 <!-- - **Email** :  -->
 - **Issues GitHub** : [https://github.com/Ysearch-motor/Ysearch-api/issues](https://github.com/Ysearch-motor/Ysearch-api/issues)
+
