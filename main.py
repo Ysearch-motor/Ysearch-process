@@ -1,23 +1,33 @@
-from warcio.archiveiterator import ArchiveIterator
-import trafilatura
-import duckdb
+import data_searcher
+import sequencer
+import vectoriser
+import indexer
+import numpy as np
+import ast
 
-# Fichier WARC à lire
-warc_file = "fichier.warc.gz"
+# lire la data depuis le fichier
+# file_path = "data.txt"
+# with open(file_path, "r", encoding="utf-8") as f:
+#     content = f.read()
+# textes = ast.literal_eval(content)
 
-# Stocker les données dans DuckDB
-con = duckdb.connect("commoncrawl.db")
-con.execute("CREATE TABLE IF NOT EXISTS pages (url TEXT, text TEXT)")
 
-i = 0
-with open(warc_file, "rb") as f:
-    for record in ArchiveIterator(f):
-        print(i)
-        if record.rec_type == "response":
-            url = record.rec_headers.get_header("WARC-Target-URI")
-            html = record.content_stream().read().decode(errors="ignore")
-            text = trafilatura.extract(html)  # Extraction propre du texte
+def main():
+    embeddings = []
+    urls = []
+    h1s = []
+    textes = data_searcher.get_data("fichier.warc.gz")
+    for text in textes:
+        text_segments = sequencer.segment_text(text[2][0], 150, 2)
+        embedding = vectoriser.vectorize_text(text_segments)
+        embeddings.append(embedding)
+        urls.append(text[0][0])
+        h1s.append(text[1][0])
+    np.save("urls.npy", urls)
+    np.save("h1s.npy", h1s)
+    np.save("embeddings.npy", np.array(embeddings))
+    indexer.index_embeddings(np.array(embeddings))
 
-            if text:  # Sauvegarde dans DuckDB
-                con.execute("INSERT INTO pages VALUES (?, ?)", (url, text))
-        i += 1
+
+if __name__ == "__main__":
+    main()
