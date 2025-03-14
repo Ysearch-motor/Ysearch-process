@@ -1,9 +1,10 @@
-from warcio.archiveiterator import ArchiveIterator
-import trafilatura
-from langdetect import detect
-from bs4 import BeautifulSoup
-from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
+import requests
+import trafilatura
+from bs4 import BeautifulSoup
+from langdetect import detect
+from warcio.archiveiterator import ArchiveIterator
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def process_record(record_data):
     """
@@ -23,13 +24,15 @@ def process_record(record_data):
             sys.stderr.write(f"Skipping record due to error: {e}\n")
     return None
 
-def get_data(warc_file):
+def get_data(warcurl, warc_file):
     """
     Extrait les données d'un fichier WARC en parallèle et retourne une liste
     contenant [url], [h1] et [texte_brut] pour chaque page en français.
     """
     data = []
     records = []
+
+    get_warc(warcurl)
 
     # Lecture séquentielle du fichier et collecte des données brutes
     with open(warc_file, "rb") as f:
@@ -55,3 +58,13 @@ def get_data(warc_file):
 
     return data
 
+def get_warc(warcurl: str):
+    """
+    Télécharge un fichier WARC à partir d'une URL et le sauvegarde localement.
+    """
+    response = requests.get("https://data.commoncrawl.org/"+warcurl)
+    print("fichier téléchargé avec succès")
+    if response.status_code == 200:
+        with open("./warc/fichier.warc.gz", "wb") as f:
+            f.write(response.content)
+            print("fichier écris avec succès")
