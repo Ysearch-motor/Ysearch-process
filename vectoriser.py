@@ -15,11 +15,14 @@ def vectorize_text(segments):
         list of numpy.ndarray: A list of embeddings corresponding to the input text segments.
     """
     embeddings = []
+    # Vectorize each segment
     for segment in segments:
         embedding = model.encode(segment)
         embeddings.append(embedding)
 
+    # Compute the mean embedding
     mean_embedding = np.mean(embeddings, axis=0)
 
+    # Normalize the mean embedding fot get ready for indexing
     normalized_mean_embedding = mean_embedding / np.linalg.norm(mean_embedding)
     return normalized_mean_embedding

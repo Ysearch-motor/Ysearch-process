@@ -5,6 +5,15 @@ from bs4 import BeautifulSoup
 
 
 def get_data(warc_file):
+    """
+    Extract data from a WARC file and return a list of lists containing the URL, the h1 and the text of the page.
+    Args:
+        warc_file (str): the path to the compressed WARC file.
+
+    Returns:
+        list of lists: the data extracted from the WARC file.
+    """
+
     data = []
     i = 0
     with open(warc_file, "rb") as f:
@@ -24,7 +33,9 @@ def get_data(warc_file):
                     except Exception as e:
                         print(f"Skipping record due to error: {e}")
 
+        # Write the data for keep trace
         with open("data.txt", "w", encoding="utf-8") as f:
             for row in data:
-                f.write(f"{row}\n")
+                f.write(f"{row},\n")
+
         return data
