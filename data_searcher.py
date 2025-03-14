@@ -2,40 +2,56 @@ from warcio.archiveiterator import ArchiveIterator
 import trafilatura
 from langdetect import detect
 from bs4 import BeautifulSoup
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import sys
 
+def process_record(record_data):
+    """
+    Fonction de traitement d'un enregistrement.
+    Retourne [url], [h1] et [texte_brut] si le texte est en français.
+    """
+    url, html = record_data
+    text_brut = trafilatura.extract(html)
+    if text_brut:
+        try:
+            if detect(text_brut) == "fr":
+                # Utilisation de lxml pour un parsing plus rapide
+                soup = BeautifulSoup(html, "lxml")
+                h1 = soup.h1.get_text() if soup.h1 else ""
+                return [[url], [h1], [text_brut]]
+        except Exception as e:
+            sys.stderr.write(f"Skipping record due to error: {e}\n")
+    return None
 
 def get_data(warc_file):
     """
-    Extract data from a WARC file and return a list of lists containing the URL, the h1 and the text of the page.
-    Args:
-        warc_file (str): the path to the compressed WARC file.
-
-    Returns:
-        list of lists: the data extracted from the WARC file.
+    Extrait les données d'un fichier WARC en parallèle et retourne une liste
+    contenant [url], [h1] et [texte_brut] pour chaque page en français.
     """
-
     data = []
-    i = 0
+    records = []
+
+    # Lecture séquentielle du fichier et collecte des données brutes
     with open(warc_file, "rb") as f:
         for record in ArchiveIterator(f):
             if record.rec_type == "response":
                 url = record.rec_headers.get_header("WARC-Target-URI")
                 html = record.content_stream().read().decode(errors="ignore")
-                text_brut = trafilatura.extract(html)
-                if text_brut:
-                    try:
-                        if detect(text_brut) == "fr":
-                            soup = BeautifulSoup(html, "html.parser")
-                            h1 = soup.h1.get_text() if soup.h1 else ""
-                            data.append([[url], [h1], [text_brut]])
-                            i += 1
-                            print(i)
-                    except Exception as e:
-                        print(f"Skipping record due to error: {e}")
+                records.append((url, html))
 
-        # Write the data for keep trace
-        with open("data.txt", "w", encoding="utf-8") as f:
-            for row in data:
-                f.write(f"{row},\n")
+    # Traitement parallèle avec ProcessPoolExecutor
+    with ProcessPoolExecutor() as executor:
+        futures = [executor.submit(process_record, rec) for rec in records]
+        for i, future in enumerate(as_completed(futures), 1):
+            result = future.result()
+            if result:
+                data.append(result)
+            print(f"Traitement de l'enregistrement n°{i}")
 
-        return data
+    # Sauvegarde des données dans un fichier pour garder une trace
+    with open("data.txt", "w", encoding="utf-8") as f:
+        for row in data:
+            f.write(f"{row},\n")
+
+    return data
+
