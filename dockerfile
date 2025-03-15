@@ -5,6 +5,7 @@ WORKDIR /app
 # Copier et installer les dépendances
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python3 -m spacy download fr_core_news_sm
 
 # Copier le code source
 COPY . .
