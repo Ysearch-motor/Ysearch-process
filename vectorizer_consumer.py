@@ -2,16 +2,19 @@ import json
 import time
 import logging
 import pika
-from sequence import segment_text
-from vectorizer import vectorize_text
-from config import RABBITMQ_HOST, VECTORIZATION_QUEUE, INDEXING_QUEUE, RABBITMQ_RETRY_DELAY
+from sequencer import segment_text
+from vectoriser import vectorize_text
+from config import RABBITMQ_HOST, VECTORIZATION_QUEUE, INDEXING_QUEUE, RABBITMQ_RETRY_DELAY, RABBITMQ_USER, RABBITMQ_PASSWORD
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_rabbit_connection():
     while True:
         try:
-            connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+            credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
+            )
             logging.info("Connecté à RabbitMQ")
             return connection
         except Exception as e:

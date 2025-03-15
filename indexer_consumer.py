@@ -3,7 +3,7 @@ import time
 import logging
 import pika
 from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
-from config import RABBITMQ_HOST, INDEXING_QUEUE, ES_HOSTS, ES_INDEX, ES_DIMS, RABBITMQ_RETRY_DELAY
+from config import RABBITMQ_HOST, INDEXING_QUEUE, ES_HOSTS, ES_INDEX, ES_DIMS, RABBITMQ_RETRY_DELAY, RABBITMQ_USER, RABBITMQ_PASSWORD
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -44,7 +44,10 @@ def create_index(es):
 def get_rabbit_connection():
     while True:
         try:
-            connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+            credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
+            )
             logging.info("Connecté à RabbitMQ")
             return connection
         except Exception as e:
