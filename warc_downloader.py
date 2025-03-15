@@ -42,10 +42,10 @@ def download_warc(warc_url, local_file):
             logging.info(f"WARC téléchargé: {local_file}")
             return True
         else:
-            logging.error(f"Échec du téléchargement pour {warc_url}, status: {response.status_code}")
+            logging.error(f"Échec du téléchargement pour {url}, status: {response.status_code}")
             return False
     except Exception as e:
-        logging.error(f"Erreur lors du téléchargement de {warc_url}: {e}")
+        logging.error(f"Erreur lors du téléchargement de {url}: {e}")
         return False
 
 def callback(ch, method, properties, body):
