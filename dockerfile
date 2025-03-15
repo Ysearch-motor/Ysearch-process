@@ -18,6 +18,7 @@ COPY ./sequencer.py /app
 COPY ./vectoriser.py /app
 COPY ./vectorizer_consumer.py /app
 COPY ./warc_downloader.py /app
+COPY ./config.py /app
 
 
 # Le CMD par défaut sera remplacé par la commande spécifique de chaque service dans docker-compose.yml
