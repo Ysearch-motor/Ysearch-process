@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python3 -m spacy download fr_core_news_sm
 
 # Copier le code source
-COPY . .
+COPY . /app
 
 # Le CMD par défaut sera remplacé par la commande spécifique de chaque service dans docker-compose.yml
 CMD ["python", "main.py"]
