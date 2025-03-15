@@ -1,28 +1,24 @@
 services:
   download_producer:
     build: .
-    container_name: download_producer
     command: python download_producer.py
     networks:
       - mynet
 
   warc_downloader:
     build: .
-    container_name: warc_downloader
     command: python warc_downloader.py
     networks:
       - mynet
 
   vectorizer_consumer:
     build: .
-    container_name: vectorizer_consumer
     command: python vectorizer_consumer.py
     networks:
       - mynet
 
   indexer_consumer:
     build: .
-    container_name: indexer_consumer
     command: python indexer_consumer.py
     networks:
       - mynet
