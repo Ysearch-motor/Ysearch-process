@@ -7,7 +7,7 @@ services:
 
   warc_downloader:
     build: .
-    command: python warc_donwloader.py
+    command: python warc_downloader.py
     networks:
       - mynet
 
