@@ -27,7 +27,7 @@ def main():
     # Suppose que vos URLs sont stockées dans un fichier "download_urls.txt"
     # avec une URL par ligne.
     try:
-        with open("path2.paths", "r") as f:
+        with open("path.paths", "r") as f:
             urls = f.readlines()
     except Exception as e:
         logging.error(f"Erreur de lecture du fichier download_urls.txt : {e}")
