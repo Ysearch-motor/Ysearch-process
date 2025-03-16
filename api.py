@@ -1,9 +1,17 @@
+import config
+from opensearchpy import OpenSearch
 from elasticsearch import Elasticsearch
 from sentence_transformers import SentenceTransformer
-import config
+from config import ES_HOSTS
 
 # Initialisation du client Elasticsearch à partir de la configuration
-es = Elasticsearch(hosts=config.ES_HOSTS)
+es = OpenSearch(
+    hosts=ES_HOSTS,
+    http_compress=True,
+    timeout=30,
+    max_retries=10,
+    retry_on_timeout=True
+)
 
 # Chargement du modèle d'encodage
 model = SentenceTransformer("all-MiniLM-L6-v2")
