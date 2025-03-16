@@ -10,7 +10,7 @@ DOWNLOAD_QUEUE = 'download_queue'
 RABBITMQ_RETRY_DELAY = 5  # secondes avant tentative de reconnexion
 
 # Elasticsearch
-ES_HOSTS = ['http://158.69.54.81:9200']
+ES_HOSTS = [{"host":'158.69.54.81',"port":9200}]
 ES_INDEX = 'pages'
 ES_DIMS = 384  # Dimension des embeddings pour le modèle "all-MiniLM-L6-v2"
 
