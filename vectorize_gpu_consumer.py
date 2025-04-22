@@ -3,7 +3,6 @@ import time
 import pika
 import torch
 import logging
-import numpy as np
 import torch.nn.functional as F
 from sequencer import segment_text
 from sentence_transformers import SentenceTransformer
@@ -18,38 +17,17 @@ from config import (
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Configure device to GPU if available
+# Device configuration (GPU if available)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.info(f"Using device: {device}")
 
-# Initialize the SentenceTransformer model on the GPU\model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
+# Initialize the SentenceTransformer model on the GPU
+model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
 
-def vectorize_text(segments, batch_size=64):
-    """
-    Vectorizes a list of text segments using a pre-trained model on GPU.
+# Batch sizes
+DOC_BATCH_SIZE = 10000        # Number of documents to pull per RabbitMQ batch
+EMBED_BATCH_SIZE = 512        # Number of segments per GPU encode batch
 
-    Args:
-        segments (list of str): A list of text segments to be vectorized.
-        batch_size (int): Number of segments per batch during encoding.
-
-    Returns:
-        numpy.ndarray: A normalized mean embedding ready for indexing.
-    """
-    # Encode all segments in batches, returning tensors on the device
-    embeddings = model.encode(
-        segments,
-        batch_size=batch_size,
-        convert_to_tensor=True,
-        show_progress_bar=False,
-        device=device
-    )
-
-    # Compute mean embedding on GPU
-    mean_emb = torch.mean(embeddings, dim=0)
-    # Normalize the embedding (L2 norm)
-    normalized_emb = F.normalize(mean_emb, p=2, dim=0)
-    # Move to CPU and convert to numpy
-    return normalized_emb.cpu().numpy()
 
 def get_rabbit_connection():
     while True:
@@ -58,53 +36,103 @@ def get_rabbit_connection():
             connection = pika.BlockingConnection(
                 pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
             )
-            logging.info("Connecté à RabbitMQ")
+            logging.info("Connected to RabbitMQ")
             return connection
         except Exception as e:
-            logging.error(f"Erreur de connexion à RabbitMQ: {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes.")
+            logging.error(f"RabbitMQ connection error: {e}. Retrying in {RABBITMQ_RETRY_DELAY}s.")
             time.sleep(RABBITMQ_RETRY_DELAY)
 
-def callback(ch, method, properties, body):
-    try:
+
+def process_batch(channel):
+    """
+    Pulls up to DOC_BATCH_SIZE messages, vectorizes them in bulk on the GPU,
+    and publishes the embeddings back to the indexing queue.
+    Returns the number of messages processed.
+    """
+    # 1) Pull a batch of messages
+    msgs = []
+    for _ in range(DOC_BATCH_SIZE):
+        method, properties, body = channel.basic_get(
+            queue=VECTORIZATION_QUEUE,
+            auto_ack=False
+        )
+        if method:
+            msgs.append((method, body))
+        else:
+            break
+
+    if not msgs:
+        return 0
+
+    # 2) Parse and segment text
+    all_segments = []
+    counts = []    # number of segments per doc
+    docs = []      # original messages
+    for method, body in msgs:
         message = json.loads(body)
-        text = message['text']
-        segments = segment_text(text, 150, 2)
-        # Vectorize segments on GPU
-        embedding = vectorize_text(segments)
-        new_message = {
+        segments = segment_text(message['text'], 150, 2)
+        counts.append(len(segments))
+        all_segments.extend(segments)
+        docs.append((method, message))
+
+    # 3) Encode all segments in batches on GPU
+    embeddings = model.encode(
+        all_segments,
+        batch_size=EMBED_BATCH_SIZE,
+        convert_to_tensor=True,
+        show_progress_bar=False,
+        device=device
+    )
+
+    # 4) Split embeddings by document and compute normalized mean
+    doc_embeddings = []
+    idx = 0
+    for count in counts:
+        chunk = embeddings[idx: idx + count]
+        mean_emb = torch.mean(chunk, dim=0)
+        norm_emb = F.normalize(mean_emb, p=2, dim=0)
+        doc_embeddings.append(norm_emb.cpu().numpy())
+        idx += count
+
+    # 5) Publish embeddings and ack messages
+    for (method, message), emb in zip(docs, doc_embeddings):
+        new_msg = {
             "url": message["url"],
             "h1": message["h1"],
-            "embedding": embedding.tolist()
+            "embedding": emb.tolist()
         }
-        ch.basic_publish(
+        channel.basic_publish(
             exchange='',
             routing_key=INDEXING_QUEUE,
-            body=json.dumps(new_message),
+            body=json.dumps(new_msg),
             properties=pika.BasicProperties(delivery_mode=2)
         )
-        logging.info(f"Vectorisation terminée pour {message['url']}")
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-    except Exception as e:
-        logging.error(f"Erreur dans le callback de vectorisation pour le message {body}: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        logging.info(f"Processed and acked: {message['url']}")
+
+    return len(msgs)
+
 
 def main():
     connection = get_rabbit_connection()
     channel = connection.channel()
     channel.queue_declare(queue=VECTORIZATION_QUEUE, durable=True)
     channel.queue_declare(queue=INDEXING_QUEUE, durable=True)
-    channel.basic_qos(prefetch_count=1)
-    channel.basic_consume(queue=VECTORIZATION_QUEUE, on_message_callback=callback)
-    logging.info("Vectorizer Consumer en attente de messages...")
+    channel.basic_qos(prefetch_count=DOC_BATCH_SIZE)
+    logging.info("Batch Vectorizer Consumer awaiting messages...")
+
     try:
-        channel.start_consuming()
+        while True:
+            processed = process_batch(channel)
+            if processed == 0:
+                time.sleep(1)
     except KeyboardInterrupt:
-        logging.info("Interruption manuelle, arrêt du consumer.")
-        channel.stop_consuming()
+        logging.info("Manual interruption, shutting down consumer.")
     except Exception as e:
-        logging.error(f"Erreur dans le consumer: {e}")
+        logging.error(f"Consumer error: {e}")
     finally:
         connection.close()
+
 
 if __name__ == "__main__":
     main()
