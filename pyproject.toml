@@ -65,6 +65,7 @@ dependencies = [
     "nest-asyncio==1.6.0",
     "networkx==3.4.2",
     "numpy==2.2.3",
+    "opensearchpy",
     "packaging==24.2",
     "pandas==2.2.3",
     "parso==0.8.4",
