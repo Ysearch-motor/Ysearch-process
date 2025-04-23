@@ -3,6 +3,7 @@ from opensearchpy import OpenSearch
 from elasticsearch import Elasticsearch
 from sentence_transformers import SentenceTransformer
 from config import ES_HOSTS
+import time
 
 # Initialisation du client Elasticsearch à partir de la configuration
 es = OpenSearch(
@@ -31,7 +32,10 @@ def search(query: str, k: int = 10):
             }
         }
     }
+    start_time = time.time()
     res = es.search(index=config.ES_INDEX, body=body)
+    end_time = time.time()
+    print(f"Temps de recherche: {end_time - start_time:.2f} secondes")
     hits = res["hits"]["hits"]
 
     results = []
@@ -44,5 +48,5 @@ def search(query: str, k: int = 10):
         })
     return {"Résultat": results}
 
-print(search("Politique Française",30))
+print(search("Politique Française",15))
 

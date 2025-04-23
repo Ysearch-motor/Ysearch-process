@@ -1,27 +1,125 @@
 services:
-  download_producer:
-    build: .
-    command: python download_producer.py
+  rabbit1:
+    image: rabbitmq:3-management
+    hostname: rabbit1
+    container_name: rabbit1
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=MY_SECRET_COOKIE
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_NODENAME=rabbit@rabbit1
+    ports:
+      - "15672:15672"   # Interface de gestion
+      - "5672:5672"     # Port AMQP
     networks:
-      - mynet
+      - rabbitmq-net
 
-  warc_downloader:
-    build: .
-    command: python warc_downloader.py
+  rabbit2:
+    image: rabbitmq:3-management
+    hostname: rabbit2
+    container_name: rabbit2
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=MY_SECRET_COOKIE
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_NODENAME=rabbit@rabbit2
+    depends_on:
+      - rabbit1
     networks:
-      - mynet
+      - rabbitmq-net
+    command: >
+      bash -c "rabbitmq-server -detached &&
+               sleep 10 &&
+               rabbitmqctl stop_app &&
+               rabbitmqctl join_cluster rabbit@rabbit1 &&
+               rabbitmqctl start_app &&
+               tail -f /dev/null"
+  rabbit3:
+    image: rabbitmq:3-management
+    hostname: rabbit3
+    container_name: rabbit3
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=MY_SECRET_COOKIE
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_NODENAME=rabbit@rabbit3
+    depends_on:
+      - rabbit1
+    networks:
+      - rabbitmq-net
+    command: >
+      bash -c "rabbitmq-server -detached &&
+               sleep 10 &&
+               rabbitmqctl stop_app &&
+               rabbitmqctl join_cluster rabbit@rabbit1 &&
+               rabbitmqctl start_app &&
+               tail -f /dev/null"
 
-  vectorizer_consumer:
-    build: .
-    command: python vectorizer_consumer.py
+  rabbit4:
+    image: rabbitmq:3-management
+    hostname: rabbit4
+    container_name: rabbit4
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=MY_SECRET_COOKIE
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_NODENAME=rabbit@rabbit4
+    depends_on:
+      - rabbit1
     networks:
-      - mynet
+      - rabbitmq-net
+    command: >
+      bash -c "rabbitmq-server -detached &&
+               sleep 10 &&
+               rabbitmqctl stop_app &&
+               rabbitmqctl join_cluster rabbit@rabbit1 &&
+               rabbitmqctl start_app &&
+               tail -f /dev/null"
 
-  indexer_consumer:
-    build: .
-    command: python indexer_consumer.py
+  rabbit5:
+    image: rabbitmq:3-management
+    hostname: rabbit5
+    container_name: rabbit5
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=MY_SECRET_COOKIE
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_NODENAME=rabbit@rabbit5
+    depends_on:
+      - rabbit1
     networks:
-      - mynet
+      - rabbitmq-net
+    command: >
+      bash -c "rabbitmq-server -detached &&
+               sleep 10 &&
+               rabbitmqctl stop_app &&
+               rabbitmqctl join_cluster rabbit@rabbit1 &&
+               rabbitmqctl start_app &&
+               tail -f /dev/null"
+  opensearch:
+    image: opensearchproject/opensearch:2.9.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms8g -Xmx8g"
+    ports:
+      - "9200:9200"    # API REST
+      - "9600:9600"    # API de monitoring
+    volumes:
+      - esdata:/usr/share/opensearch/data
+    security_opt:
+      - seccomp:unconfined
+    networks:
+      - esnet
 
 networks:
-  mynet:
+  rabbitmq-net:
+    driver: bridge
+  esnet:
+    driver: bridge
+
+volumes:
+  esdata:
+    driver: local

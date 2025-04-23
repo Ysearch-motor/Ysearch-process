@@ -2,11 +2,19 @@ import json
 import time
 import logging
 import pika
-from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
-from config import RABBITMQ_HOST, INDEXING_QUEUE, ES_HOSTS, ES_INDEX, ES_DIMS, RABBITMQ_RETRY_DELAY, RABBITMQ_USER, RABBITMQ_PASSWORD
-from opensearchpy import OpenSearch
+from opensearchpy import OpenSearch, helpers
+from config import (
+    RABBITMQ_HOST, INDEXING_QUEUE,
+    ES_HOSTS, ES_INDEX, ES_DIMS,
+    RABBITMQ_RETRY_DELAY, RABBITMQ_USER,
+    RABBITMQ_PASSWORD
+)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Taille maximale du batch avant envoi
+BATCH_SIZE = 10000
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_es_connection():
     while True:
@@ -18,14 +26,15 @@ def get_es_connection():
                 max_retries=10,
                 retry_on_timeout=True
             )
-            # Test de connexion
             if es.ping():
                 logging.info("Connecté à OpenSearch")
                 return es
-            else:
-                raise Exception("Ping failed")
+            raise Exception("Ping failed")
         except Exception as e:
-            logging.error(f"Erreur de connexion à OpenSearch: {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes.")
+            logging.error(
+                f"Erreur de connexion à OpenSearch: {e}. "
+                f"Nouvelle tentative dans {RABBITMQ_RETRY_DELAY}s."
+            )
             time.sleep(RABBITMQ_RETRY_DELAY)
 
 def create_index(es):
@@ -54,56 +63,87 @@ def create_index(es):
             es.indices.create(index=ES_INDEX, body=mapping)
             logging.info(f"Index {ES_INDEX} créé.")
         except Exception as e:
-            logging.error(f"Erreur lors de la création de l'index {ES_INDEX}: {e}")
-
+            logging.error(f"Erreur création index {ES_INDEX}: {e}")
 
 def get_rabbit_connection():
     while True:
         try:
-            credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-            connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
+            creds = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
+            conn = pika.BlockingConnection(
+                pika.ConnectionParameters(host=RABBITMQ_HOST,
+                                          credentials=creds)
             )
             logging.info("Connecté à RabbitMQ")
-            return connection
+            return conn
         except Exception as e:
-            logging.error(f"Erreur de connexion à RabbitMQ: {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes.")
+            logging.error(
+                f"Erreur connexion RabbitMQ: {e}. "
+                f"Nouveau essai dans {RABBITMQ_RETRY_DELAY}s."
+            )
             time.sleep(RABBITMQ_RETRY_DELAY)
 
-def callback(ch, method, properties, body):
-    try:
-        message = json.loads(body)
-        doc = {
-            "url": message["url"],
-            "h1": message["h1"],
-            "embedding": message["embedding"]
-        }
-        res = es.index(index=ES_INDEX, body=doc)
-        logging.info(f"Document indexé (ID: {res.get('_id')}) pour {message['url']}")
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-    except Exception as e:
-        logging.error(f"Erreur lors de l'indexation du document {body}: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-
 def main():
-    global es
     es = get_es_connection()
     create_index(es)
+
+    # Tampons d'accumulation
+    actions = []
+    delivery_tags = []
+
+    def callback(ch, method, properties, body):
+        nonlocal actions, delivery_tags
+
+        try:
+            msg = json.loads(body)
+            # Préparation de l’action pour bulk
+            action = {
+                "_index": ES_INDEX,
+                "_source": {
+                    "url": msg["url"],
+                    "h1": msg["h1"],
+                    "embedding": msg["embedding"]
+                }
+            }
+            actions.append(action)
+            delivery_tags.append(method.delivery_tag)
+
+            # Dès qu'on atteint la taille de batch, on envoie
+            if len(actions) >= BATCH_SIZE:
+                helpers.bulk(es, actions)
+                logging.info(f"Batch de {len(actions)} documents indexé.")
+                # Ack après succès
+                for tag in delivery_tags:
+                    ch.basic_ack(delivery_tag=tag)
+                # Réinitialisation des tampons
+                actions, delivery_tags = [], []
+
+        except Exception as e:
+            logging.error(f"Erreur durant le traitement du message {body}: {e}")
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
     connection = get_rabbit_connection()
     channel = connection.channel()
     channel.queue_declare(queue=INDEXING_QUEUE, durable=True)
-    channel.basic_qos(prefetch_count=1)
+    # On peut augmenter prefetch_count à BATCH_SIZE pour plus d'efficacité
+    channel.basic_qos(prefetch_count=BATCH_SIZE)
     channel.basic_consume(queue=INDEXING_QUEUE, on_message_callback=callback)
+
     logging.info("Indexer Consumer en attente de messages...")
     try:
         channel.start_consuming()
     except KeyboardInterrupt:
         logging.info("Interruption manuelle, arrêt du consumer.")
-        channel.stop_consuming()
-    except Exception as e:
-        logging.error(f"Erreur dans le consumer d'indexation: {e}")
     finally:
+        # Avant de quitter, on flush tout ce qui reste
+        if actions:
+            try:
+                helpers.bulk(es, actions)
+                logging.info(f"Flush final de {len(actions)} docs.")
+                for tag in delivery_tags:
+                    channel.basic_ack(delivery_tag=tag)
+            except Exception as e:
+                logging.error(f"Erreur flush final: {e}")
+        channel.stop_consuming()
         connection.close()
 
 if __name__ == "__main__":
