@@ -130,13 +130,13 @@ def main():
                 # Ack après succès
                 for tag in delivery_tags:
                     data={
-                    "step":"index",
-                    "url":msg["url"],
-                    "batchsize":BATCH_SIZE,
-                    "time_indexation": time_indexation,
-                    "time_rabbitmq_connection": time_rabbitmq_connection,
-                    "time_es_conncetion": time_es_conncetion,
-                    "machine": MACHINE
+                        "step":"index",
+                        "url":msg["url"],
+                        "batchsize":BATCH_SIZE,
+                        "time_indexation": time_indexation,
+                        "time_rabbitmq_connection": time_rabbitmq_connection,
+                        "time_es_conncetion": time_es_conncetion,
+                        "machine": MACHINE
                     }
                     logger(data)
                     ch.basic_ack(delivery_tag=tag)
@@ -166,6 +166,16 @@ def main():
                 helpers.bulk(es, actions)
                 logging.info(f"Flush final de {len(actions)} docs.")
                 for tag in delivery_tags:
+                    data={
+                        "step":"index",
+                        "url":msg["url"],
+                        "batchsize":BATCH_SIZE,
+                        "time_indexation": time_indexation,
+                        "time_rabbitmq_connection": time_rabbitmq_connection,
+                        "time_es_conncetion": time_es_conncetion,
+                        "machine": MACHINE
+                    }
+                    logger(data)
                     channel.basic_ack(delivery_tag=tag)
             except Exception as e:
                 logging.error(f"Erreur flush final: {e}")
