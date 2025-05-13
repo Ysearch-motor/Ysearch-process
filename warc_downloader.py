@@ -1,12 +1,17 @@
 import os
+import sys
 import pika
 import json
 import time
 import logging
 import hashlib
 import requests
-import data_searcher as data_search
+import trafilatura
 import logger as logger
+from bs4 import BeautifulSoup
+from langdetect import detect
+from warcio.archiveiterator import ArchiveIterator
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from config import (
     RABBITMQ_HOST,
     RABBITMQ_USER,
@@ -24,6 +29,57 @@ time_thrait = 0
 time_download = 0
 time_load = 0
 time_get_rabbit_connection = 0
+
+def process_record(record_data):
+    """
+    Fonction de traitement d'un enregistrement.
+    Retourne [url], [h1] et [texte_brut] si le texte est en français.
+    """
+    url, html = record_data
+    text_brut = trafilatura.extract(html)
+    if text_brut:
+        try:
+            if detect(text_brut) == "fr":
+                # Utilisation de lxml pour un parsing plus rapide
+                soup = BeautifulSoup(html, "lxml")
+                h1 = soup.h1.get_text() if soup.h1 else ""
+                return [[url], [h1], [text_brut]]
+        except Exception as e:
+            sys.stderr.write(f"Skipping record due to error: {e}\n")
+    return None
+
+
+def get_data(warc_file):
+    """
+    Extrait les données d'un fichier WARC en parallèle et retourne une liste
+    contenant [url], [h1] et [texte_brut] pour chaque page en français.
+    """
+    data = []
+    records = []
+
+    # Lecture séquentielle du fichier et collecte des données brutes
+    with open(warc_file, "rb") as f:
+        for record in ArchiveIterator(f):
+            if record.rec_type == "response":
+                url = record.rec_headers.get_header("WARC-Target-URI")
+                html = record.content_stream().read().decode(errors="ignore")
+                records.append((url, html))
+
+    # Traitement parallèle avec ProcessPoolExecutor
+    with ProcessPoolExecutor() as executor:
+        futures = [executor.submit(process_record, rec) for rec in records]
+        for i, future in enumerate(as_completed(futures), 1):
+            result = future.result()
+            if result:
+                data.append(result)
+            # print(f"Traitement de l'enregistrement n°{i}")
+
+    # Sauvegarde des données dans un fichier pour garder une trace
+    with open("data.txt", "w", encoding="utf-8") as f:
+        for row in data:
+            f.write(f"{row},\n")
+
+    return data
 
 
 def get_rabbit_connection():
@@ -92,7 +148,7 @@ def callback(ch, method, properties, body):  # noqa: C901
 
         # Charger et mesurer le temps de chargement des données
         start_load = time.time()
-        records = data_search.get_data(local_file)
+        records = get_data(local_file)
         time_load = time.time() - start_load
         logging.info(f"Données chargées en {time_load:.2f}s")
         # Démarrer le chronomètre de traitement

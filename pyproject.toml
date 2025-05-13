@@ -26,6 +26,7 @@ dependencies = [
     "dateparser==1.2.1",
     "debugpy==1.8.12",
     "decorator==5.1.1",
+    "dotenv>=0.9.9",
     "duckdb==1.2.0",
     "elastic-transport==8.17.1",
     "elasticsearch==8.17.2",

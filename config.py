@@ -1,30 +1,36 @@
-# config.py
+import os
+import ast
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Charge le .env dans le même dossier que ce fichier
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # RabbitMQ
-RABBITMQ_HOST = '158.69.54.81'
-# RABBITMQ_HOST = 'localhost'
-RABBITMQ_USER = 'cocosjn'
-RABBITMQ_PASSWORD = 'cocosjn'
-VECTORIZATION_QUEUE = 'vectorization_queue'
-INDEXING_QUEUE = 'indexing_queue'
-DOWNLOAD_QUEUE = 'download_queue'
-RABBITMQ_RETRY_DELAY = 5  # secondes avant tentative de reconnexion
-MAX_WORKERS = 4
+RABBITMQ_HOST        = os.getenv("RABBITMQ_HOST")
+RABBITMQ_USER        = os.getenv("RABBITMQ_USER")
+RABBITMQ_PASSWORD    = os.getenv("RABBITMQ_PASSWORD")
+VECTORIZATION_QUEUE  = os.getenv("VECTORIZATION_QUEUE")
+INDEXING_QUEUE       = os.getenv("INDEXING_QUEUE")
+DOWNLOAD_QUEUE       = os.getenv("DOWNLOAD_QUEUE")
+RABBITMQ_RETRY_DELAY = int(os.getenv("RABBITMQ_RETRY_DELAY", 5))
+MAX_WORKERS          = int(os.getenv("MAX_WORKERS", 1))
 
 # Elasticsearch
-ES_HOSTS = [{"host":'158.69.54.81',"port":9200}]
-# ES_HOSTS = [{"host":'localhost',"port":9200}]
-ES_INDEX = 'pages'
-ES_DIMS = 384  # Dimension des embeddings pour le modèle "all-MiniLM-L6-v2"
+ES_HOSTS = ast.literal_eval(os.getenv("ES_HOSTS", "[]"))
+ES_INDEX = os.getenv("ES_INDEX")
+ES_DIMS  = int(os.getenv("ES_DIMS", 384))
 
-# Paramètres généraux
-LOG_LEVEL = 'INFO'
+# Logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-MONGO_USER = "root"
-MONGO_PASS = "password"
-MONGO_HOST = "158.69.54.81"
-# MONGO_HOST = "localhost"
-MONGO_PORT = 27017
-MONGO_AUTH_SRC = "admin" 
+# MongoDB
+MONGO_USER     = os.getenv("MONGO_USER")
+MONGO_PASS     = os.getenv("MONGO_PASS")
+MONGO_HOST     = os.getenv("MONGO_HOST")
+MONGO_PORT     = int(os.getenv("MONGO_PORT", 27017))
+MONGO_AUTH_SRC = os.getenv("MONGO_AUTH_SRC")
 
-MACHINE = "Mac Valentin" # valeur possible "Mac Valentin","Mac Corentin","Tour Valentin","serveur"
+# Machine
+MACHINE = os.getenv("MACHINE", "Mac Valentin")
