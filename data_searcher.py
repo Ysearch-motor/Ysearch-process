@@ -47,7 +47,7 @@ def get_data(warc_file):
             result = future.result()
             if result:
                 data.append(result)
-            print(f"Traitement de l'enregistrement n°{i}")
+            # print(f"Traitement de l'enregistrement n°{i}")
 
     # Sauvegarde des données dans un fichier pour garder une trace
     with open("data.txt", "w", encoding="utf-8") as f:

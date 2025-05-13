@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from config import (
     RABBITMQ_USER,
     RABBITMQ_PASSWORD,
+    RABBITMQ_HOST,
     MONGO_HOST,
     MONGO_PORT,
     MONGO_USER,
@@ -16,6 +17,7 @@ from config import (
 uri = f"mongodb://{MONGO_USER}:{MONGO_PASS}@{MONGO_HOST}:{MONGO_PORT}/?authSource={MONGO_AUTH_SRC}"
 mongo_client = MongoClient(uri)
 db = mongo_client["logger"]
+
 if "warc_logs" not in db.list_collection_names():
     db.create_collection(
         "warc_logs",
@@ -26,8 +28,28 @@ if "warc_logs" not in db.list_collection_names():
         },
     )
 
+if "vector_logs" not in db.list_collection_names():
+    db.create_collection(
+        "vector_logs",
+        timeseries={
+            "timeField": "Created_at",
+            "metaField": "url",
+            "granularity": "seconds",
+        },
+    )
+
+if "index_logs" not in db.list_collection_names():
+    db.create_collection(
+        "index_logs",
+        timeseries={
+            "timeField": "Created_at",
+            "metaField": "url",
+            "granularity": "seconds",
+        },
+    )
+
 # === MQTT ===
-BROKER = "158.69.54.81"
+BROKER = RABBITMQ_HOST
 PORT   = 1883
 TOPIC  = "logger"
 

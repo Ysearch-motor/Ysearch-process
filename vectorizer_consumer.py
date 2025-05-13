@@ -6,13 +6,16 @@ import logging
 import numpy as np
 from sequencer import segment_text
 from sentence_transformers import SentenceTransformer
-from config import RABBITMQ_HOST, VECTORIZATION_QUEUE, INDEXING_QUEUE, RABBITMQ_RETRY_DELAY, RABBITMQ_USER, RABBITMQ_PASSWORD
+from logger import logger
+from config import RABBITMQ_HOST, VECTORIZATION_QUEUE, INDEXING_QUEUE, RABBITMQ_RETRY_DELAY, RABBITMQ_USER, RABBITMQ_PASSWORD, MACHINE
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
 
+time_encode = 0
+time_get_rabbit_connection = 0
 
 def vectorize_text(segments):
     """
@@ -24,9 +27,12 @@ def vectorize_text(segments):
     Returns:
         list of numpy.ndarray: A list of embeddings corresponding to the input text segments.
     """
+    global time_encode  # track encoding time
+    start_time = time.time()
     embeddings = []
     # Vectorize each segment
     for segment in segments:
+
         embedding = model.encode(segment)
         embeddings.append(embedding)
 
@@ -35,9 +41,12 @@ def vectorize_text(segments):
 
     # Normalize the mean embedding fot get ready for indexing
     normalized_mean_embedding = mean_embedding / np.linalg.norm(mean_embedding)
+    time_encode = time.time() - start_time
     return normalized_mean_embedding
 
 def get_rabbit_connection():
+    global time_get_rabbit_connection  # track connection time
+    start_time = time.time()
     while True:
         try:
             credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
@@ -45,6 +54,7 @@ def get_rabbit_connection():
                 pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
             )
             logging.info("Connecté à RabbitMQ")
+            time_get_rabbit_connection = time.time() - start_time
             return connection
         except Exception as e:
             logging.error(f"Erreur de connexion à RabbitMQ: {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes.")
@@ -68,6 +78,15 @@ def callback(ch, method, properties, body):
             properties=pika.BasicProperties(delivery_mode=2)
         )
         logging.info(f"Vectorisation terminée pour {message['url']}")
+        data = {
+            "step": "vector",
+            "url": message["url"],
+            "h1": message["h1"],
+            "time_encode": time_encode,
+            "time_get_rabbit_connection": time_get_rabbit_connection,
+            "computer": MACHINE,
+        }
+        logger(data)
         ch.basic_ack(delivery_tag=method.delivery_tag)
     except Exception as e:
         logging.error(f"Erreur dans le callback de vectorisation pour le message {body}: {e}")

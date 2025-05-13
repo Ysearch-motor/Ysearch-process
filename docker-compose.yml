@@ -16,6 +16,18 @@ services:
     networks:
       - rabbitmq-net
 
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_logs:/var/log/mongodb
+
   opensearch:
     image: opensearchproject/opensearch:2.9.0
     container_name: opensearch
@@ -43,3 +55,5 @@ networks:
 volumes:
   esdata:
     driver: local
+  mongodb_data:
+  mongodb_logs:

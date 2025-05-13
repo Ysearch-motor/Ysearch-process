@@ -1,9 +1,9 @@
 import json
 import time
-from config import RABBITMQ_USER, RABBITMQ_PASSWORD
+from config import RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_HOST
 import paho.mqtt.client as mqtt
 
-BROKER = '158.69.54.81'
+BROKER = RABBITMQ_HOST
 PORT   = 1883
 TOPIC  = 'logger'
 

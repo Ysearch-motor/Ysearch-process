@@ -6,13 +6,15 @@ import logging
 import torch.nn.functional as F
 from sequencer import segment_text
 from sentence_transformers import SentenceTransformer
+from logger import logger
 from config import (
     RABBITMQ_HOST,
     VECTORIZATION_QUEUE,
     INDEXING_QUEUE,
     RABBITMQ_RETRY_DELAY,
     RABBITMQ_USER,
-    RABBITMQ_PASSWORD
+    RABBITMQ_PASSWORD,
+    MACHINE,
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,12 +26,17 @@ logging.info(f"Using device: {device}")
 # Initialize the SentenceTransformer model on the GPU
 model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
 
+time_encode = 0
+time_embeding=0
+time_get_rabbit_connection = 0
+
 # Batch sizes
 DOC_BATCH_SIZE = 10000        # Number of documents to pull per RabbitMQ batch
 EMBED_BATCH_SIZE = 512        # Number of segments per GPU encode batch
 
-
 def get_rabbit_connection():
+    global time_get_rabbit_connection
+    start_time = time.time()
     while True:
         try:
             credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
@@ -37,6 +44,7 @@ def get_rabbit_connection():
                 pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
             )
             logging.info("Connected to RabbitMQ")
+            time_get_rabbit_connection = time.time() - start_time
             return connection
         except Exception as e:
             logging.error(f"RabbitMQ connection error: {e}. Retrying in {RABBITMQ_RETRY_DELAY}s.")
@@ -44,6 +52,8 @@ def get_rabbit_connection():
 
 
 def process_batch(channel):
+    global time_encode
+    global time_embeding
     """
     Pulls up to DOC_BATCH_SIZE messages, vectorizes them in bulk on the GPU,
     and publishes the embeddings back to the indexing queue.
@@ -64,6 +74,7 @@ def process_batch(channel):
     if not msgs:
         return 0
 
+    start_time = time.time()
     # 2) Parse and segment text
     all_segments = []
     counts = []    # number of segments per doc
@@ -74,8 +85,10 @@ def process_batch(channel):
         counts.append(len(segments))
         all_segments.extend(segments)
         docs.append((method, message))
+    time_encode = time.time() - start_time
 
     # 3) Encode all segments in batches on GPU
+    start_time = time.time()
     embeddings = model.encode(
         all_segments,
         batch_size=EMBED_BATCH_SIZE,
@@ -83,7 +96,7 @@ def process_batch(channel):
         show_progress_bar=False,
         device=device
     )
-
+    time_embeding = time.time() - start_time
     # 4) Split embeddings by document and compute normalized mean
     doc_embeddings = []
     idx = 0
@@ -107,8 +120,18 @@ def process_batch(channel):
             body=json.dumps(new_msg),
             properties=pika.BasicProperties(delivery_mode=2)
         )
+
         channel.basic_ack(delivery_tag=method.delivery_tag)
         logging.info(f"Processed and acked: {message['url']}")
+        data = {
+            "step": "vector",
+            "url": message["url"],
+            "time_encode": time_encode,
+            "time_embeding": time_embeding,
+            "time_get_rabbit_connection": time_get_rabbit_connection,
+            "computer": MACHINE,
+        }
+        logger(data)
 
     return len(msgs)
 
