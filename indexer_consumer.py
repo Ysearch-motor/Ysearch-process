@@ -3,22 +3,30 @@ import time
 import logging
 import pika
 from opensearchpy import OpenSearch, helpers
+from logger import logger
 from config import (
     RABBITMQ_HOST, INDEXING_QUEUE,
     ES_HOSTS, ES_INDEX, ES_DIMS,
     RABBITMQ_RETRY_DELAY, RABBITMQ_USER,
-    RABBITMQ_PASSWORD
+    RABBITMQ_PASSWORD,
+    MACHINE
 )
 
 # Taille maximale du batch avant envoi
-BATCH_SIZE = 10000
+BATCH_SIZE = 100
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
+time_es_conncetion=0
+time_indexation=0
+time_rabbitmq_connection=0
+
 def get_es_connection():
+    global time_es_conncetion
     while True:
         try:
+            start_time = time.time()
             es = OpenSearch(
                 hosts=ES_HOSTS,
                 http_compress=True,
@@ -28,6 +36,7 @@ def get_es_connection():
             )
             if es.ping():
                 logging.info("Connecté à OpenSearch")
+                time_es_conncetion = time.time() - start_time
                 return es
             raise Exception("Ping failed")
         except Exception as e:
@@ -66,6 +75,8 @@ def create_index(es):
             logging.error(f"Erreur création index {ES_INDEX}: {e}")
 
 def get_rabbit_connection():
+    global time_rabbitmq_connection
+    start_time = time.time()
     while True:
         try:
             creds = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
@@ -74,6 +85,7 @@ def get_rabbit_connection():
                                           credentials=creds)
             )
             logging.info("Connecté à RabbitMQ")
+            time_rabbitmq_connection = time.time() - start_time
             return conn
         except Exception as e:
             logging.error(
@@ -83,6 +95,7 @@ def get_rabbit_connection():
             time.sleep(RABBITMQ_RETRY_DELAY)
 
 def main():
+
     es = get_es_connection()
     create_index(es)
 
@@ -91,9 +104,11 @@ def main():
     delivery_tags = []
 
     def callback(ch, method, properties, body):
+        global time_indexation
         nonlocal actions, delivery_tags
 
         try:
+            start_time= time.time()
             msg = json.loads(body)
             # Préparation de l’action pour bulk
             action = {
@@ -111,8 +126,19 @@ def main():
             if len(actions) >= BATCH_SIZE:
                 helpers.bulk(es, actions)
                 logging.info(f"Batch de {len(actions)} documents indexé.")
+                time_indexation += time.time() - start_time
                 # Ack après succès
                 for tag in delivery_tags:
+                    data={
+                    "step":"index",
+                    "url":msg["url"],
+                    "batchsize":BATCH_SIZE,
+                    "time_indexation": time_indexation,
+                    "time_rabbitmq_connection": time_rabbitmq_connection,
+                    "time_es_conncetion": time_es_conncetion,
+                    "machine": MACHINE
+                    }
+                    logger(data)
                     ch.basic_ack(delivery_tag=tag)
                 # Réinitialisation des tampons
                 actions, delivery_tags = [], []
