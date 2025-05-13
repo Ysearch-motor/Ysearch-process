@@ -24,3 +24,5 @@ MONGO_PASS = "password"
 MONGO_HOST = "158.69.54.81"
 MONGO_PORT = 27017
 MONGO_AUTH_SRC = "admin" 
+
+MACHINE = "Mac Valentin" # valeur possible "Mac Valentin","Mac Corentin","Tour Valentin","serveur"

@@ -14,6 +14,7 @@ from config import (
     DOWNLOAD_QUEUE,
     VECTORIZATION_QUEUE,
     RABBITMQ_RETRY_DELAY,
+    MACHINE
 )
 
 logging.basicConfig(
@@ -195,6 +196,7 @@ def callback(ch, method, properties, body):  # noqa: C901
             "load_time": time_load,
             "processing_time": time_thrait,
             "rabbit_connection_time": time_get_rabbit_connection,
+            "computer":MACHINE
         }
         logger.logger(data)
         # logging.info(
