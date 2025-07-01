@@ -1,0 +1,59 @@
+services:
+  rabbit1:
+    image: rabbitmq:3-management
+    hostname: rabbit1
+    container_name: rabbit1
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=MY_SECRET_COOKIE
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+      - RABBITMQ_NODENAME=rabbit@rabbit1
+    ports:
+      - "15672:15672"   # Interface de gestion
+      - "5672:5672"     # Port AMQP
+      - "1883:1883"     # Port MQTT
+      - "8883:8883"   # Port MQTT sécurisé
+    networks:
+      - rabbitmq-net
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_logs:/var/log/mongodb
+
+  opensearch:
+    image: opensearchproject/opensearch:2.9.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms8g -Xmx8g"
+    ports:
+      - "9200:9200"    # API REST
+      - "9600:9600"    # API de monitoring
+    volumes:
+      - esdata:/usr/share/opensearch/data
+    security_opt:
+      - seccomp:unconfined
+    networks:
+      - esnet
+
+networks:
+  rabbitmq-net:
+    driver: bridge
+  esnet:
+    driver: bridge
+
+volumes:
+  esdata:
+    driver: local
+  mongodb_data:
+  mongodb_logs:
