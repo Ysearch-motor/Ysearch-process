@@ -17,15 +17,12 @@ model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
 time_encode = 0
 time_get_rabbit_connection = 0
 
-def vectorize_text(segments):
-    """
-    Vectorizes a list of text segments using a pre-trained model.
+def vectorize_text(segments: list[str]) -> np.ndarray:
+    """Vectorise une liste de segments de texte.
 
-    Args:
-        segments (list of str): A list of text segments to be vectorized.
-
-    Returns:
-        list of numpy.ndarray: A list of embeddings corresponding to the input text segments.
+    :param list[str] segments: segments à encoder
+    :return: embedding moyen normalisé
+    :rtype: numpy.ndarray
     """
     global time_encode  # track encoding time
     start_time = time.time()
@@ -44,7 +41,12 @@ def vectorize_text(segments):
     time_encode = time.time() - start_time
     return normalized_mean_embedding
 
-def get_rabbit_connection():
+def get_rabbit_connection() -> pika.BlockingConnection:
+    """Établit une connexion RabbitMQ et mesure la durée.
+
+    :return: connexion ouverte
+    :rtype: pika.BlockingConnection
+    """
     global time_get_rabbit_connection  # track connection time
     start_time = time.time()
     while True:
@@ -60,7 +62,16 @@ def get_rabbit_connection():
             logging.error(f"Erreur de connexion à RabbitMQ: {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes.")
             time.sleep(RABBITMQ_RETRY_DELAY)
 
-def callback(ch, method, properties, body):
+def callback(ch, method, properties, body) -> None:
+    """Traite un message de texte, le vectorise et publie l'embedding.
+
+    :param ch: canal RabbitMQ
+    :param method: meta-données de livraison
+    :param properties: propriétés AMQP
+    :param body: contenu JSON encodé
+    :return: ``None``
+    :rtype: None
+    """
     try:
         message = json.loads(body)
         text = message['text']
@@ -93,7 +104,12 @@ def callback(ch, method, properties, body):
         # En cas d'erreur, on peut requeue le message pour réessayer
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
-def main():
+def main() -> None:
+    """Démarre le consumer de vectorisation CPU.
+
+    :return: ``None``
+    :rtype: None
+    """
     connection = get_rabbit_connection()
     channel = connection.channel()
     channel.queue_declare(queue=VECTORIZATION_QUEUE, durable=True)

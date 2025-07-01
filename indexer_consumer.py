@@ -30,7 +30,12 @@ time_rabbitmq_connection = 0
 time_indexation_lock = threading.Lock()
 
 
-def get_es_connection():
+def get_es_connection() -> OpenSearch:
+    """Ouvre une connexion au cluster OpenSearch.
+
+    :return: client connecté
+    :rtype: OpenSearch
+    """
     global time_es_connection
     while True:
         try:
@@ -40,11 +45,13 @@ def get_es_connection():
                 http_compress=True,
                 timeout=30,
                 max_retries=10,
-                retry_on_timeout=True
+                retry_on_timeout=True,
             )
             if es.ping():
                 time_es_connection = time.time() - start
-                logging.info(f"Connecté à OpenSearch en {time_es_connection:.3f}s")
+                logging.info(
+                    f"Connecté à OpenSearch en {time_es_connection:.3f}s"
+                )
                 return es
             raise Exception("Ping failed")
         except Exception as e:
@@ -55,7 +62,13 @@ def get_es_connection():
             time.sleep(RABBITMQ_RETRY_DELAY)
 
 
-def create_index(es):
+def create_index(es: OpenSearch) -> None:
+    """Crée l'index OpenSearch s'il n'existe pas.
+
+    :param OpenSearch es: client OpenSearch prêt à l'emploi
+    :return: ``None``
+    :rtype: None
+    """
     if not es.indices.exists(index=ES_INDEX):
         mapping = {
             "settings": {
@@ -84,7 +97,12 @@ def create_index(es):
             logging.error(f"Erreur création index {ES_INDEX}: {e}")
 
 
-def get_rabbit_connection():
+def get_rabbit_connection() -> pika.BlockingConnection:
+    """Retourne une connexion RabbitMQ.
+
+    :return: connexion ouverte
+    :rtype: pika.BlockingConnection
+    """
     global time_rabbitmq_connection
     start = time.time()
     while True:
@@ -94,7 +112,9 @@ def get_rabbit_connection():
                 pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=creds)
             )
             time_rabbitmq_connection = time.time() - start
-            logging.info(f"Connecté à RabbitMQ en {time_rabbitmq_connection:.3f}s")
+            logging.info(
+                f"Connecté à RabbitMQ en {time_rabbitmq_connection:.3f}s"
+            )
             return conn
         except Exception as e:
             logging.error(
@@ -104,9 +124,16 @@ def get_rabbit_connection():
             time.sleep(RABBITMQ_RETRY_DELAY)
 
 
-def background_bulk(es_client, docs, batch_size):
-    """
-    Fonction exécutée en arrière-plan pour indexer un batch déjà acké.
+def background_bulk(
+    es_client: OpenSearch, docs: list[dict], batch_size: int
+) -> None:
+    """Indexe un lot de documents dans un thread séparé.
+
+    :param OpenSearch es_client: client OpenSearch destiné à l'indexation
+    :param list docs: documents à indexer
+    :param int batch_size: taille effective du lot
+    :return: ``None``
+    :rtype: None
     """
     global time_indexation
     start_batch = time.time()
@@ -135,7 +162,12 @@ def background_bulk(es_client, docs, batch_size):
         # Ici, les documents sont déjà ackés, donc ils sont perdus en cas d'erreur.
 
 
-def main():
+def main() -> None:
+    """Consomme les messages de vecteurs et les indexe par lots.
+
+    :return: ``None``
+    :rtype: None
+    """
     es = get_es_connection()
     create_index(es)
 
@@ -143,6 +175,14 @@ def main():
     delivery_tags = []
 
     def callback(ch, method, properties, body):
+        """Traite un message d'indexation.
+
+        :param ch: canal RabbitMQ
+        :param method: meta-données de livraison
+        :param properties: propriétés AMQP
+        :param body: message JSON encodé
+        """
+
         nonlocal actions, delivery_tags
 
         try:

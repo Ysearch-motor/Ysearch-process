@@ -34,7 +34,12 @@ time_get_rabbit_connection = 0
 DOC_BATCH_SIZE = 10000        # Number of documents to pull per RabbitMQ batch
 EMBED_BATCH_SIZE = 512        # Number of segments per GPU encode batch
 
-def get_rabbit_connection():
+def get_rabbit_connection() -> pika.BlockingConnection:
+    """Ouvre une connexion RabbitMQ et mesure le temps nécessaire.
+
+    :return: connexion ouverte
+    :rtype: pika.BlockingConnection
+    """
     global time_get_rabbit_connection
     start_time = time.time()
     while True:
@@ -47,18 +52,21 @@ def get_rabbit_connection():
             time_get_rabbit_connection = time.time() - start_time
             return connection
         except Exception as e:
-            logging.error(f"RabbitMQ connection error: {e}. Retrying in {RABBITMQ_RETRY_DELAY}s.")
+            logging.error(
+                f"RabbitMQ connection error: {e}. Retrying in {RABBITMQ_RETRY_DELAY}s."
+            )
             time.sleep(RABBITMQ_RETRY_DELAY)
 
 
-def process_batch(channel):
+def process_batch(channel: pika.adapters.blocking_connection.BlockingChannel) -> int:
+    """Traite un lot de documents et renvoie le nombre d'éléments traités.
+
+    :param pika.adapters.blocking_connection.BlockingChannel channel: canal RabbitMQ
+    :return: nombre de documents réellement traités
+    :rtype: int
+    """
     global time_encode
     global time_embeding
-    """
-    Pulls up to DOC_BATCH_SIZE messages, vectorizes them in bulk on the GPU,
-    and publishes the embeddings back to the indexing queue.
-    Returns the number of messages processed.
-    """
     # 1) Pull a batch of messages
     msgs = []
     for _ in range(DOC_BATCH_SIZE):
@@ -136,7 +144,12 @@ def process_batch(channel):
     return len(msgs)
 
 
-def main():
+def main() -> None:
+    """Boucle principale du consumer vectorisation GPU.
+
+    :return: ``None``
+    :rtype: None
+    """
     connection = get_rabbit_connection()
     channel = connection.channel()
     channel.queue_declare(queue=VECTORIZATION_QUEUE, durable=True)

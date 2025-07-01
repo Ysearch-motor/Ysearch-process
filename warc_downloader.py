@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from langdetect import detect
 from warcio.archiveiterator import ArchiveIterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import List, Optional, Tuple
 from config import (
     RABBITMQ_HOST,
     RABBITMQ_USER,
@@ -30,10 +31,12 @@ time_download = 0
 time_load = 0
 time_get_rabbit_connection = 0
 
-def process_record(record_data):
-    """
-    Fonction de traitement d'un enregistrement.
-    Retourne [url], [h1] et [texte_brut] si le texte est en français.
+def process_record(record_data: Tuple[str, str]) -> Optional[list[list[str]]]:
+    """Traite un enregistrement WARC.
+
+    :param Tuple[str, str] record_data: couple ``(url, html)``
+    :return: ``[[url], [h1], [texte_brut]]`` ou ``None`` si non français
+    :rtype: Optional[list[list[str]]]
     """
     url, html = record_data
     text_brut = trafilatura.extract(html)
@@ -49,10 +52,12 @@ def process_record(record_data):
     return None
 
 
-def get_data(warc_file):
-    """
-    Extrait les données d'un fichier WARC en parallèle et retourne une liste
-    contenant [url], [h1] et [texte_brut] pour chaque page en français.
+def get_data(warc_file: str) -> List[list[str]]:
+    """Extrait toutes les pages françaises d'un fichier WARC.
+
+    :param str warc_file: chemin local du fichier WARC
+    :return: liste des triplets ``[[url], [h1], [texte]]``
+    :rtype: list[list[str]]
     """
     data = []
     records = []
@@ -82,11 +87,13 @@ def get_data(warc_file):
     return data
 
 
-def get_rabbit_connection():
+def get_rabbit_connection() -> pika.BlockingConnection:
+    """Ouvre une connexion RabbitMQ avec heartbeat prolongé.
+
+    :return: connexion ouverte
+    :rtype: pika.BlockingConnection
+    """
     global time_get_rabbit_connection  # track connection time
-    """
-    Crée une connexion RabbitMQ avec heartbeat et timeout pour éviter les timeouts sur une connexion persistante.
-    """
     while True:
         try:
             time_start = time.time()
@@ -108,7 +115,14 @@ def get_rabbit_connection():
             time.sleep(RABBITMQ_RETRY_DELAY)
 
 
-def download_warc(warc_url, local_file):
+def download_warc(warc_url: str, local_file: str) -> bool:
+    """Télécharge un fichier WARC à l'emplacement indiqué.
+
+    :param str warc_url: chemin relatif du fichier WARC sur CommonCrawl
+    :param str local_file: destination locale du téléchargement
+    :return: ``True`` si succès
+    :rtype: bool
+    """
     global time_download  # track download time
     start_download = time.time()
     try:
@@ -132,7 +146,16 @@ def download_warc(warc_url, local_file):
         return False
 
 
-def callback(ch, method, properties, body):  # noqa: C901
+def callback(ch, method, properties, body) -> None:  # noqa: C901
+    """Traite un message contenant une URL WARC.
+
+    :param ch: canal RabbitMQ
+    :param method: meta-données de livraison
+    :param properties: propriétés AMQP
+    :param body: message JSON encodé
+    :return: ``None``
+    :rtype: None
+    """
     global time_load, time_thrait, time_download, time_get_rabbit_connection  # track load and processing times
     try:
         message = json.loads(body)
@@ -266,7 +289,12 @@ def callback(ch, method, properties, body):  # noqa: C901
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
 
-def main():
+def main() -> None:
+    """Démarre le consumer de téléchargement WARC.
+
+    :return: ``None``
+    :rtype: None
+    """
     connection = get_rabbit_connection()
     channel = connection.channel()
     channel.queue_declare(queue=DOWNLOAD_QUEUE, durable=True)
