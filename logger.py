@@ -1,5 +1,6 @@
 import json
 import time
+from typing import Any
 from config import RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_HOST
 import paho.mqtt.client as mqtt
 
@@ -7,7 +8,12 @@ BROKER = RABBITMQ_HOST
 PORT   = 1883
 TOPIC  = 'logger'
 
-def logger(data: any):
+def logger(data: Any) -> None:
+    """Publie un dictionnaire de données sur le topic MQTT.
+
+    Args:
+        data (Any): données sérialisables en JSON.
+    """
     # 1) Création du client MQTT
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
     client.username_pw_set(RABBITMQ_USER, RABBITMQ_PASSWORD)

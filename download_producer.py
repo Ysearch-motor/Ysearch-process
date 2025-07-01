@@ -6,7 +6,14 @@ from config import RABBITMQ_HOST, RABBITMQ_USER, RABBITMQ_PASSWORD, DOWNLOAD_QUE
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_rabbit_connection():
+def get_rabbit_connection() -> pika.BlockingConnection:
+    """Retourne une connexion RabbitMQ fiable.
+
+    La fonction tente de se connecter indéfiniment jusqu'à succès.
+
+    Returns:
+        pika.BlockingConnection: objet de connexion ouvert.
+    """
     while True:
         try:
             credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
@@ -16,10 +23,13 @@ def get_rabbit_connection():
             logging.info("Connecté à RabbitMQ")
             return connection
         except Exception as e:
-            logging.error(f"Erreur de connexion à RabbitMQ : {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes.")
+            logging.error(
+                f"Erreur de connexion à RabbitMQ : {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes."
+            )
             time.sleep(RABBITMQ_RETRY_DELAY)
 
-def main():
+def main() -> None:
+    """Lit la liste des URLs et les publie dans la file de téléchargement."""
     connection = get_rabbit_connection()
     channel = connection.channel()
     channel.queue_declare(queue=DOWNLOAD_QUEUE, durable=True)

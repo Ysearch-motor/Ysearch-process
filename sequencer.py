@@ -3,16 +3,16 @@ import spacy
 nlp = spacy.load("fr_core_news_sm")
 
 
-def segment_text(text, max_words, overlap_sentences):
-    """
-    This function segment the input text
+def segment_text(text: str, max_words: int, overlap_sentences: int) -> list[str]:
+    """Découpe un texte en segments de longueur maximale.
+
     Args:
-        text (string)  : the text to segment
-        max_words (integer) : max length of the segment
-        overlap_sentences (integer) : how many sentences will be shared by 2 segment.
+        text (str): texte source à segmenter.
+        max_words (int): nombre maximal de mots par segment.
+        overlap_sentences (int): nombre de phrases réutilisées entre deux segments.
 
     Returns:
-        (list of string) : the segments
+        list[str]: liste des segments produits.
     """
     doc = nlp(text)
     sentences = [sent.text for sent in doc.sents]
