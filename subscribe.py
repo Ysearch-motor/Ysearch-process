@@ -53,14 +53,22 @@ BROKER = RABBITMQ_HOST
 PORT   = 1883
 TOPIC  = "logger"
 
-def on_connect(client, userdata, flags, rc, properties=None):
+def on_connect(
+    client: mqtt.Client,
+    userdata: object,
+    flags: dict,
+    rc: int,
+    properties: mqtt.Properties | None = None,
+) -> None:
+    """Callback MQTT exécuté lors de la connexion."""
     # rc = 0   → connexion acceptée
     # rc = 4   → bad username/password (ou anonyme interdit)
     print(f"Connected with code {rc}")
     if rc == 0:
         client.subscribe(TOPIC, qos=1)
 
-def on_message(client, userdata, msg):
+def on_message(client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
+    """Stocke chaque message reçu dans la base MongoDB."""
     try:
         payload_dict = json.loads(msg.payload.decode())
     except json.JSONDecodeError:
@@ -85,7 +93,8 @@ def on_message(client, userdata, msg):
     collection.insert_one(doc)
     print(f"[RCV] {msg.topic} → {payload_dict} (saved in {collection.name})")
 
-def main():
+def main() -> None:
+    """Démarre l'abonnement MQTT et reste en écoute infinie."""
     # on passe à l’API v2 pour les callbacks
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
     client.username_pw_set(RABBITMQ_USER, RABBITMQ_PASSWORD)
