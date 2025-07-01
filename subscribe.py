@@ -53,14 +53,38 @@ BROKER = RABBITMQ_HOST
 PORT   = 1883
 TOPIC  = "logger"
 
-def on_connect(client, userdata, flags, rc, properties=None):
+def on_connect(
+    client: mqtt.Client,
+    userdata: object,
+    flags: dict,
+    rc: int,
+    properties: mqtt.Properties | None = None,
+) -> None:
+    """Callback MQTT exécuté lors de la connexion.
+
+    :param mqtt.Client client: client MQTT utilisé
+    :param object userdata: données utilisateur passées au callback
+    :param dict flags: indicateurs de connexion
+    :param int rc: code retour du broker
+    :param mqtt.Properties properties: propriétés supplémentaires
+    :return: ``None``
+    :rtype: None
+    """
     # rc = 0   → connexion acceptée
     # rc = 4   → bad username/password (ou anonyme interdit)
     print(f"Connected with code {rc}")
     if rc == 0:
         client.subscribe(TOPIC, qos=1)
 
-def on_message(client, userdata, msg):
+def on_message(client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
+    """Stocke chaque message reçu dans la base MongoDB.
+
+    :param mqtt.Client client: client MQTT utilisé
+    :param object userdata: données utilisateur associées
+    :param mqtt.MQTTMessage msg: message MQTT reçu
+    :return: ``None``
+    :rtype: None
+    """
     try:
         payload_dict = json.loads(msg.payload.decode())
     except json.JSONDecodeError:
@@ -85,7 +109,12 @@ def on_message(client, userdata, msg):
     collection.insert_one(doc)
     print(f"[RCV] {msg.topic} → {payload_dict} (saved in {collection.name})")
 
-def main():
+def main() -> None:
+    """Démarre l'abonnement MQTT et reste en écoute infinie.
+
+    :return: ``None``
+    :rtype: None
+    """
     # on passe à l’API v2 pour les callbacks
     client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
     client.username_pw_set(RABBITMQ_USER, RABBITMQ_PASSWORD)

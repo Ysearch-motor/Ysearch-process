@@ -6,7 +6,15 @@ from config import RABBITMQ_HOST, RABBITMQ_USER, RABBITMQ_PASSWORD, DOWNLOAD_QUE
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_rabbit_connection():
+def get_rabbit_connection() -> pika.BlockingConnection:
+    """Ouvre une connexion RabbitMQ.
+
+    Cette fonction tente de se connecter en boucle jusqu'à ce que la
+    connexion aboutisse.
+
+    :return: objet de connexion ouvert
+    :rtype: pika.BlockingConnection
+    """
     while True:
         try:
             credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
@@ -16,10 +24,19 @@ def get_rabbit_connection():
             logging.info("Connecté à RabbitMQ")
             return connection
         except Exception as e:
-            logging.error(f"Erreur de connexion à RabbitMQ : {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes.")
+            logging.error(
+                f"Erreur de connexion à RabbitMQ : {e}. Nouvelle tentative dans {RABBITMQ_RETRY_DELAY} secondes."
+            )
             time.sleep(RABBITMQ_RETRY_DELAY)
 
-def main():
+def main() -> None:
+    """Publie les URLs WARC dans RabbitMQ.
+
+    Les chemins sont lus depuis le fichier ``path.paths``.
+
+    :return: ``None``
+    :rtype: None
+    """
     connection = get_rabbit_connection()
     channel = connection.channel()
     channel.queue_declare(queue=DOWNLOAD_QUEUE, durable=True)
