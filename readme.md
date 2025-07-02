@@ -31,7 +31,7 @@ graph TD
 ## Configuration rapide
 1. Installez les dépendances :
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 2. Créez un fichier `.env` à la racine contenant au minimum :
    ```env
